@@ -1,0 +1,242 @@
+exit all
+configure
+#--------------------------------------------------
+echo "System Configuration"
+#--------------------------------------------------
+    system
+        name "{{ key }}"
+        rollback
+            rollback-location "cf3:\configs\db\rb"
+        exit
+        snmp
+            streaming
+                no shutdown
+            exit
+            packet-size 9216
+            no shutdown
+        exit
+        time
+            ntp
+                server 172.16.2.225
+                no shutdown
+            exit
+            sntp
+                shutdown
+            exit
+            dst-zone EEST
+                start last sunday march 02:00
+                end last sunday october 03:00
+            exit
+            zone EET
+        exit
+    exit
+#--------------------------------------------------
+echo "System Security Configuration"
+#--------------------------------------------------
+    system
+        security
+            telnet-server
+            ftp-server
+            profile "cramer"
+                default-action deny-all
+                entry 1
+                    match "show"
+                    action permit
+                exit
+                entry 2
+                    match "exit"
+                    action permit
+                exit
+                entry 3
+                    match "ping"
+                    action permit
+                exit
+                entry 4
+                    match "traceroute"
+                    action permit
+                exit
+                entry 5
+                    match "environment"
+                    action permit
+                exit
+                entry 6
+                    match "logout"
+                    action permit
+                exit
+            exit
+            profile "cfg-backup"
+                default-action deny-all
+                entry 1
+                    match "admin display-config"
+                    action permit
+                exit
+                entry 2
+                    match "exit"
+                    action permit
+                exit
+                entry 4
+                    match "show bof"
+                    action permit
+                exit
+                entry 5
+                    match "file copy"
+                    action permit
+                exit
+                entry 6
+                    match "admin save"
+                    action permit
+                exit
+            exit
+            profile "mpls-script"
+                default-action deny-all
+                entry 1
+                    match "show"
+                    action permit
+                exit
+                entry 2
+                    match "exit"
+                    action permit
+                exit
+                entry 3
+                    match "logout"
+                    action permit
+                exit
+                entry 4
+                    match "environment"
+                    action permit
+                exit
+            exit
+            password
+                authentication-order radius local
+                attempts 64 time 0 lockout 0
+            exit
+            radius
+                authorization
+                server 1 address 172.16.2.240 secret "UmqTMoU9.jJNXP7vs35ld." hash2
+            exit
+            user "5620sam"
+                password "$2y$10$VaFzkMAxtecmHuC5l4I1k.UMfqFvfOU07REDjKuFb67m78WMy5aFq"
+                access console ftp snmp
+                console
+                    member "default"
+                    member "administrative"
+                exit
+                snmp
+                    group "nmsPriv"
+                exit
+            exit
+            user "Crammer"
+                password "$2y$10$yHysg7wbLKve.A0mHL2pQ.iR70JxRt1wLnp4yOH23UQz0q.HpHGa."
+                access console
+                console
+                    no member "default"
+                    member "cramer"
+                exit
+            exit
+            user "admin"
+                password "$2y$10$0J1Cr1Mdz5czN.ylrMHyE./VsDDJ.3qXgGJTnEHJLUg0BYI2DS1ni"
+                access console ftp snmp
+                console
+                    member "administrative"
+                exit
+            exit
+            user "cfg-backup"
+                password "$2y$10$vN4UXM9m5fv5BgVHjjhAg.kjkN.qlvebrpMmULLNL5iWP/PzYGuja"
+                access console ftp
+                console
+                    no member "default"
+                    member "cfg-backup"
+                exit
+            exit
+            user "mpls-script"
+                password "$2y$10$Gl91t8cbpck4mzl..EGds.oa1o4Yr2HcUkbhcDUAcK.DJkmFxGCX6"
+                access console ftp
+                console
+                    no member "default"
+                    member "mpls-script"
+                exit
+            exit
+            snmp
+                view "services-lock" subtree "1.3.6.1.4.1.6527.3.1.2.4.3.2.1.6"
+                exit
+                view "precision-view" subtree "1.3.6.1.4.1.6527.3.1.2.4.3"
+                exit
+                access group "nmsPriv" security-model usm security-level privacy read "iso" write "iso" notify "iso"
+                access group "nmsPriv" security-model usm security-level privacy context "vprn" prefix read "vprn-view" write "vprn-view" notify "iso"
+                access group "precision" security-model snmpv2c security-level no-auth-no-privacy read "precision-view"
+                access group "services-lock" security-model snmpv2c security-level no-auth-no-privacy read "services-lock" write "services-lock"
+                community "NVqnwXMkD1Y3h9ai9LYxrE" hash2 rw version v2c
+                usm-community "Pxc9Y3GaMA3L8t0lBDN9c." hash2 group "precision"
+                community "BGp4WKZ7qW6Lq42Q7lAHYRFzqK44A4ot" hash2 rwa version both
+            exit
+            ssh
+                preserve-key
+            exit
+        exit
+    exit
+#--------------------------------------------------
+echo "System Login Control Configuration"
+#--------------------------------------------------
+    system
+        login-control
+            idle-timeout 240
+            pre-login-message "\r\n             K Y I V S T A R\r\n\r\n         This router is the property of Kyivstar JSC.\r\n         All actions are monitored.\r\n         Unauthorized access is prohibited.\r\n         Violators will be prosecuted.\r\n\r\n         For operational problems contact:\r\n         Kyivstar Network Operations Centre\r\n         e-mail: ip@kyivstar.net\r\n         phone : +380674661088\r\n"
+            motd text "You connected to ['{{ key }}'] IP : ['{{ sysip.ip | ipv4_addr }}']  NOKIA 7250 IXR-E  "
+            no login-banner
+        exit
+    exit
+#--------------------------------------------------
+echo "Log Configuration"
+#--------------------------------------------------
+    log
+        syslog 1
+            address 172.16.2.240
+            facility local4
+            log-prefix "ALCATEL"
+        exit
+        syslog 2
+            address 172.16.248.180
+            facility local4
+            log-prefix "ALCATEL"
+        exit
+        snmp-trap-group 98
+            description "5620sam"
+        exit
+        log-id 50
+            from main security change
+            to syslog 1
+            no shutdown
+        exit
+        log-id 60
+            from main security change
+            to syslog 2
+            no shutdown
+        exit
+        log-id 98
+            from main security change
+            to snmp 1024
+            no shutdown
+        exit
+    exit
+#--------------------------------------------------
+echo "Source IP Address Configuration"
+#--------------------------------------------------
+    system
+        security
+            source-address
+                application radius "system"
+            exit
+        exit
+    exit
+#--------------------------------------------------
+echo "System Time NTP Configuration"
+#--------------------------------------------------
+    system
+        time
+            ntp
+            exit
+        exit
+    exit
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+

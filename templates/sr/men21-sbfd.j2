@@ -1,0 +1,60 @@
+#--------------------------------------------------
+echo "BFD Configuration"
+#--------------------------------------------------
+    bfd
+{# {% if r[key]['bfd']['discriminator'] is defined %} #}
+{% if value['bfd']['discriminator'] is defined %}
+        seamless-bfd
+            reflector "BFD-REFLECTOR"
+{#                discriminator {{ r[key]['bfd']['discriminator'] }} #}
+                discriminator {{ value['bfd']['discriminator'] }}
+{# {% if r[key]['model'] is defined %}
+{% if r[key]['model'] == '7750' %} #}
+{% if value['model'] is defined %}
+{% if value['model'] == '7750' %}
+                type cmp-np
+{% endif %}
+{% endif %}
+                no shutdown
+            exit
+        exit
+{% endif %}
+    exit
+    router
+        bfd
+            begin
+            bfd-template "SBFD-KS-MEN"
+{# {% if r[key]['model'] is defined %}
+{% if r[key]['model'] == '7750' %} #}
+{% if value['model'] is defined %}
+{% if value['model'] == '7750' %}
+                type "cpm-np"
+{% endif %}
+{% endif %}
+            exit
+            commit
+            seamless-bfd
+{#{% for d in routers.ds -%} #}
+{# DS: {{ d }} #}
+{% for dk,dv in routers.ds.items() -%}
+{# AK: {{ dk }} AV: {{ dv }} #}
+{% if dv.timos is defined and dv.timos.major is defined %}
+{% if dv.timos.major|int < 20 %}
+{% for i in dv.interfaces %}
+{# DS interfaces: {{ i }} #}
+{% if i.name == 'system' %}
+                peer {{ i.ip | ipv4_addr }}
+                    discriminator {{ dv.bfd.discriminator }}
+                exit
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# {% endfor %} #}
+            exit
+        exit
+    exit
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+

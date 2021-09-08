@@ -1,0 +1,32 @@
+#--------------------------------------------------
+echo "Service Configuration"
+#--------------------------------------------------
+    service
+        system
+            bgp-evpn
+                ingress-replication-bum-label-block LBLK-1
+            exit
+        exit
+        vprn 2 name "bfd-helper" customer 1 create
+            description "Single BFD for any service"
+{% if value.site.node_idx > 0 %}
+            interface "shunt" create
+                description "Single BFD for any service"
+                address {{ '192.0.2.0/31' | first_nth_ip(value.site.node_idx | modulo(2)) }}/31
+                icmp
+                    no mask-reply
+                    no redirects
+                    no unreachables
+                exit
+                ip-mtu 1500
+                bfd 100 receive 100 multiplier 3 type fp
+                sap {{ value.site.peer_port }}:2 create
+                exit
+            exit
+            no shutdown
+{% else %}
+            # No peer for the site {{ value.site.name }}
+{% endif %}
+        exit
+    exit
+

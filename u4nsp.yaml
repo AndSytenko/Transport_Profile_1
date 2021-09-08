@@ -1,0 +1,3 @@
+snmpkey: /usr/bin/snmpkey
+snmpuser: 5620sam
+password: '@lcatel$NMP5620'

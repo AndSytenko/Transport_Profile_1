@@ -1,0 +1,11 @@
+{% for rr in rrbgp -%}
+    {{ rr }}
+            group "RRC-T2"
+{% for p in rrbgp[rr] -%}
+{#    {{ p }}  #}
+                neighbor {{ p.peer|replace("/32", "") }}
+                    description "{{ p.descr }}"
+                exit
+{% endfor %}
+            exit
+{% endfor %}

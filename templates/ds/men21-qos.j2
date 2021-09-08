@@ -1,0 +1,205 @@
+#--------------------------------------------------
+echo "QoS Policy Configuration"
+#--------------------------------------------------
+    qos
+        queue-mgmt-policy "QM-Q2-1G" create
+            description "Allow 20ms burst on 1Gbps interface w\ cir 35%"
+            mbs 875
+        exit
+        queue-mgmt-policy "QM-Q2-10G" create
+            description "Allow 20ms burst on 10Gbps interface w\ cir 35%"
+            mbs 8750
+        exit
+        queue-mgmt-policy "QM-Q2-100G" create
+            description "Allow 20ms burst on 100Gbps interface w\ cir 35%"
+            mbs 87500
+        exit
+        ingress-classification-policy "CL-KSTAR-NETWORK" create
+            description "Kyivstar Network Ingress Classification"
+            default-action fc "be" profile out
+            dot1p 0 fc "be" profile out
+            dot1p 1 fc "l2"
+            dot1p 3 fc "l1"
+            dot1p 4 fc "h2"
+            dot1p 5 fc "ef"
+            dot1p 7 fc "nc"
+            dscp "be" fc "be" profile out
+            dscp "ef" fc "ef"
+            dscp "cs1" fc "l2"
+            dscp "nc2" fc "nc"
+            dscp "af21" fc "l1"
+            dscp "af31" fc "l1"
+            dscp "af41" fc "h2"
+            lsp-exp 0 fc "be" profile out
+            lsp-exp 1 fc "l1"
+            lsp-exp 2 fc "h2"
+            lsp-exp 3 fc "l2"
+            lsp-exp 5 fc "ef"
+            lsp-exp 7 fc "nc"
+            remark any 
+        exit
+        network-ingress "KSTAR-NETWORK-IN" create
+            ingress-classification-policy "CL-KSTAR-NETWORK"
+            policer 1
+                stat-mode offered-profile-with-discards
+            exit
+            policer 2
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 3
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 4
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 5
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 6
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 7
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+            policer 8
+                stat-mode offered-profile-with-discards
+                rate max cir max
+            exit
+        exit
+        egress-remark-policy "RE-KSTAR-NETWORK" create
+            fc af create
+                dot1p 2
+            exit
+            fc be create
+                dot1p 0
+                lsp-exp 0
+            exit
+            fc ef create
+                dot1p 5
+                dscp ef
+                lsp-exp 5
+            exit
+            fc h1 create
+                dot1p 6
+            exit
+            fc h2 create
+                dot1p 4
+                dscp af41
+                lsp-exp 2
+            exit
+            fc l1 create
+                dot1p 3
+                dscp af31
+                lsp-exp 1
+            exit
+            fc l2 create
+                dot1p 1
+                dscp cs1
+                lsp-exp 3
+            exit
+            fc nc create
+                dot1p 7
+                dscp nc1
+                lsp-exp 7
+            exit
+        exit
+        vlan-qos-policy "KSTAR-NETWORK-1G-OUT" create
+            description "VLAN (Non-LAG) 1Gbps network interface scheduler [main]"
+            stat-mode enqueued-with-discards
+            queue "2" create
+                queue-mgmt "QM-Q2-1G"
+                queue-type best-effort
+                    percent-rate 100.00 cir 35.00
+                exit
+            exit
+            queue "4" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "5" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "6" create
+                queue-type expedite-hi
+                    percent-rate 50.00 cir 50.00
+                exit
+            exit
+            queue "8" create
+                queue-type expedite-hi
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+        exit
+        vlan-qos-policy "KSTAR-NETWORK-10G-OUT" create
+            description "VLAN (Non-LAG) 10Gbps network interface scheduler [main]"
+            stat-mode enqueued-with-discards
+            queue "2" create
+                queue-mgmt "QM-Q2-10G"
+                queue-type best-effort
+                    percent-rate 100.00 cir 35.00
+                exit
+            exit
+            queue "4" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "5" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "6" create
+                queue-type expedite-hi
+                    percent-rate 50.00 cir 50.00
+                exit
+            exit
+            queue "8" create
+                queue-type expedite-hi
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+        exit
+        vlan-qos-policy "KSTAR-NETWORK-100G-OUT" create
+            description "VLAN (Non-LAG) 100Gbps network interface scheduler [main]"
+            stat-mode enqueued-with-discards
+            queue "2" create
+                queue-mgmt "QM-Q2-100G"
+                queue-type best-effort
+                    percent-rate 100.00 cir 35.00
+                exit
+            exit
+            queue "4" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "5" create
+                queue-type expedite-lo
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+            queue "6" create
+                queue-type expedite-hi
+                    percent-rate 50.00 cir 50.00
+                exit
+            exit
+            queue "8" create
+                queue-type expedite-hi
+                    percent-rate 100.00 cir 5.00
+                exit
+            exit
+        exit
+    exit
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+

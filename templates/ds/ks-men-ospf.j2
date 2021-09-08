@@ -1,0 +1,69 @@
+{% extends "alu-routing.j2" %}
+{% block ospf %}
+  {% if r[key]['ospf'] is defined %}
+    {% if r[key]['isis']['instances']|length > 1 -%}
+{# more then 1 isis instances -> agg router #}    
+      {% for isis in r[key]['isis']['instances'] -%}
+/configure router ospf
+        level-capability level-1
+        area-id 49.0011
+        authentication-key "isis-{{ isis }}" 
+        authentication-type message-digest
+        traffic-engineering
+        reference-bandwidth 100000000
+        spf-wait 5 50 50
+        level 1
+            wide-metrics-only
+        exit
+        level 2
+            wide-metrics-only
+        exit
+        interface "system"
+            no shutdown
+        exit
+        {% for i in r[key]['interfaces'] -%}
+          {% if i.isis_instance == isis -%}
+        interface {{ i.name }}
+            interface-type point-to-point
+            no shutdown
+        exit
+          {% endif -%}
+        {% endfor -%}
+      {% endfor -%}
+    {% else -%}
+    {# Single instance #}
+#    Single instance
+/configure router isis 
+        level-capability level-1
+        area-id 49.0011
+        authentication-key "isis-{{ r[key]['isis']['instances'][0] }}" 
+        authentication-type message-digest
+        traffic-engineering
+        reference-bandwidth 100000000
+        spf-wait 5 50 50
+        level 1
+            wide-metrics-only
+        exit
+        level 2
+            wide-metrics-only
+        exit
+        interface "system"
+            no shutdown
+        exit
+        {% for i in r[key]['interfaces'] -%}
+{#          interf instance :{{ i.isis_instance }}
+          isis: {{ r[key]['isis']['instances'][0] }}
+          +++++++
+#}
+          {% if i.isis_instance == r[key]['isis']['instances'][0] -%}
+        interface {{ i.name }}
+            interface-type point-to-point
+            no shutdown
+        exit
+          {% endif -%}
+        {% endfor -%}
+    {% endif -%}
+        exit
+        no shutdown
+  {% endif -%}
+{% endblock -%}

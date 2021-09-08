@@ -1,0 +1,136 @@
+#--------------------------------------------------
+echo "Policy Configuration"
+#--------------------------------------------------
+{# {{ routers }} #}
+        policy-options
+            begin
+            prefix-list "SYS_IP"
+{% if rid['rid'] is defined %}
+                prefix {{ rid.rid }} exact
+{% else %}
+                prefix 172.25.0.0/16
+{% endif %}
+            exit
+            prefix-list "DEFAULT"
+                prefix 0.0.0.0/0 exact
+            exit
+            prefix-list "PL-CORE"
+                prefix 172.16.252.0/24 prefix-length-range 32-32
+                prefix 172.16.254.0/24 prefix-length-range 32-32
+            exit
+            prefix-list "PL-REGION-AGGR"
+{% for p in rrb %}
+                prefix {{ p.peer }} exact
+{% endfor %}
+            exit
+{% if rid['area'] is defined %}
+            community "IPv4_OSPF_{{ rid.area }}"
+                members "15895:4{{ rid.area }}"
+            exit
+{% endif %}
+            policy-statement "RR_BGP_{{ rid.area }}_EXP"
+                entry 10
+                    from
+                        protocol direct
+                        prefix-list "SYS_IP"
+                        family label-ipv4
+                    exit
+                    action accept
+{% if rid['area'] is defined %}
+                        community add "IPv4_OSPF_{{ rid.area }}"
+{% endif %}
+                    exit
+                exit
+                entry 100
+                    from
+                        family vpn-ipv4
+                    exit
+                    action accept
+                    exit
+                exit
+                entry 150
+                    from
+                        family evpn
+                    exit
+                    action accept
+                    exit
+                exit
+                default-action drop
+                exit
+            exit
+            policy-statement "RR_BGP_{{ rid.area }}_IMP"
+                entry 50
+                    from
+                        protocol bgp-label
+                        prefix-list "PL-REGION-AGGR"
+                        family label-ipv4
+                    exit
+                    action accept
+                    exit
+                exit
+                entry 100
+                    from
+                        protocol bgp-label
+                        prefix-list "PL-CORE"
+                        family label-ipv4
+                    exit
+                    action accept
+                        preference 9
+                        aigp-metric igp
+                    exit
+                exit
+            exit
+            commit
+        exit
+#--------------------------------------------------
+echo "BGP Configuration"
+#--------------------------------------------------
+        bgp
+            min-route-advertisement 1
+            rapid-withdrawal
+            rapid-update l2-vpn evpn
+            next-hop-resolution
+                labeled-routes
+                    transport-tunnel
+                        family vpn
+                            resolution-filter
+                                no ldp
+                                sr-ospf
+                                bgp
+                                sr-te
+                            exit
+                            resolution filter
+                        exit
+                        family label-ipv4
+                            resolution-filter
+                                no ldp
+                                sr-ospf
+                                sr-te
+                            exit
+                            resolution filter
+                        exit
+                    exit
+                exit
+            exit
+            group "RRS-T2"
+                family ipv4 vpn-ipv4 evpn label-ipv4
+                type internal
+                import "RR_BGP_{{ rid.area }}_IMP"
+                export "RR_BGP_{{ rid.area }}_EXP"
+                selective-label-ipv4-install
+{# {% for p in r[key]['bgp'] %} #}
+{% for p in rrb %}
+{# {%- if rrbgp[p.peer] is not defined -%} #}
+{# {%- set _ = rrbgp.update({p.peer : []}) -%} #}
+{# {% endif %} #}
+{# {%- set _ = rrbgp[p.peer].append({'peer': rid.rid, 'descr': key}) -%} #}
+                neighbor {{ p.peer | ipv4_addr }}
+{% if p.descr is defined %}
+                    description "{{ p.descr }}"
+{% endif %}
+                exit
+{% endfor %}
+            exit
+            no shutdown
+        exit
+

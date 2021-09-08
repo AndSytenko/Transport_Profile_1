@@ -1,0 +1,188 @@
+{% set rrb = [] -%}
+{# {% for a in routers.aggr.items() -%} #}
+{% for ak,av in routers.aggr.items() -%}
+    {#{% for ak,av in a.items() -%} #}
+{% for i in av.interfaces %}
+{% if i.name == "system" -%}
+{# {% set _= rrbgp.update({ 'peer': i.ip,  'descr': ak }) -%} #}
+{# {% set _= rrb.append({'peer': i.ip}) -%} #}
+{% set _= rrb.append({'peer': i.ip, 'descr': ak}) -%}
+{% endif %}
+{% endfor %}
+{# {% endfor %} #}
+{% endfor %}
+#{ DEBUG: RRB: {{ rrb }} }
+{# {% for r in routers.ds -%} #}
+{% for key,value in routers.ds.items() -%}
+{% set node_index = {} %}
+{% set _= node_index.update({'idx': loop.index0}) %}
+{# {% for key,value in r.items() -%} #}
+#{ DEBUG: Router Data: key -> {{ key }} }
+#{ DEBUG: Router Data: value -> {{ value }} }
+{%- set sysip = {} -%}
+{# {% for i in r[key]['interfaces'] %} #}
+{% for i in value['interfaces'] %}
+{%- if i['port'] == 'system' %}
+{% if i['ip'] is defined -%}
+{%- set _= sysip.update({ 'ip' : i['ip'] }) -%}
+{% endif -%}
+{% endif -%}
+{% endfor %}
+#{ DEBUG: SYSIP: {{ sysip.ip }} }
+###################################################
+#--------------------------------------------------
+echo " -- Configuring router {{ key }} --"
+#--------------------------------------------------
+###################################################
+{% include "men21-ixr-base.j2" %}
+{% include "men21-qos.j2" %}
+{% include "men21-sbfd.j2" %}
+#--------------------------------------------------
+echo "Port Configuration"
+#--------------------------------------------------
+{% set ksi = {} -%}
+{% set d_port_media = {} -%}
+{# {% for p in r[key]['ports'] -%} #}
+{% for p in value['ports'] -%}
+{% if p['sfp'] is defined -%}
+{% if p.sfp == "QSFP28" %}
+    #--- create a 100G connector
+    port {{ p.port }}
+{#        description "{{ p.peer_name }}:{{ p.peer_port }}" #}
+        connector
+            breakout c1-100g
+        exit
+        no shutdown
+    exit
+{#{%- set _= p.update({'port' : "{}/1".format(p.port)}) %}#}
+{% else %}
+    port {{ p.port }}
+        description "{{ p.peer_name }}:{{ p.peer_port }}"
+        ethernet
+{% if p.peer_port | str_match_rgx('^esat\-\d+\/\d+\/\d+$') %}
+            mtu 9208
+{% endif %}
+{% if p.port in [ '1/1/25', '1/1/26', '1/1/27', '1/1/28', '1/1/29' , '1/1/30', '1/1/31', '1/1/32' ] %}
+            speed 10000
+{% endif %}
+            mode hybrid
+            encap-type dot1q
+            lldp
+                dest-mac nearest-bridge
+                    admin-status tx-rx
+                    notification
+                    tx-tlvs port-desc sys-name sys-desc sys-cap
+                    tx-mgmt-address system
+                exit
+            exit
+            hold-time up 5
+        exit
+        no shutdown
+    exit
+{% endif %}
+{% endif -%}
+{% set _ = ksi.update({p.port:"{}_if1".format(p.peer_name)}) -%}
+{% set _ = d_port_media.update({p.port:p.media}) -%}
+{% endfor -%}
+#{ DEBUG: Check interface KSI list: {{ ksi }} }
+#{ DEBUG: Port Media: {{ d_port_media }} }
+#--------------------------------------------------
+echo "Router (Network Side) Configuration"         
+#--------------------------------------------------
+    router
+#--------------------------------------------------
+echo "IP Configuration"
+#--------------------------------------------------
+        if-attribute
+            srlg-group "SRLG-ACW" value 8
+            srlg-group "SRLG-CW" value 9
+        exit
+{% set kso = {} -%}
+{% set ksrlg = {} -%}
+{% set nodesid = {} -%}
+{% set rid = {} %}
+{# #{ DEBUG: node interfaces: {{ r[key]['interfaces'] }} #}
+#{ DEBUG: node interfaces: {{ value['interfaces'] }}
+{# {% for i in r[key]['interfaces'] %} #}
+{% for i in value['interfaces'] %}
+{% if ksi[i['port']] is defined %}
+        interface {{ ksi[i['port']] }}
+{% if i['vlan'] is defined %}
+            port {{ i.port }}:{{ i.vlan }}
+{% else %}
+            port {{ i.port }}
+{%- endif %}
+            icmp
+                no mask-reply
+                no redirects
+#                no unreachables
+            exit
+            ingress
+                qos "KSTAR-NETWORK-IN"
+            exit
+            egress
+                egress-remark-policy "RE-KSTAR-NETWORK"
+                agg-rate
+                    rate max cir max
+                exit
+{% if d_port_media[i.port] is defined -%}
+    {%- if d_port_media[i.port] | str_match_rgx('^100GBASE') %}
+                vlan-qos-policy "KSTAR-NETWORK-100G-OUT"
+    {% elif d_port_media[i.port] | str_match_rgx('^10GBASE') %} 
+                vlan-qos-policy "KSTAR-NETWORK-10G-OUT"
+    {% elif d_port_media[i.port] | str_match_rgx('^GIGE') %}
+                vlan-qos-policy "KSTAR-NETWORK-1G-OUT"
+  {% else %}
+                # No egress QoS?
+  {%- endif %}
+{%- endif %}
+        exit
+{% else %}
+{%- if i['port'] == 'system' %}
+        interface system
+{% if i['ospf_area'] is defined -%}
+{% if i['ip'] is defined -%}
+{%- set _ = rid.update({'rid': i.ip, 'area': i.ospf_area }) -%}
+{% endif -%}
+{% endif -%}
+{% if i['sid'] is defined -%}
+{%- set _ = nodesid.update({'sid': i['sid']}) -%}
+{% endif -%}
+{% endif -%}
+{%- endif %}
+            address {{ i.ip }}
+{% if i['ospf_area'] is defined -%}
+{%- if kso[i['ospf_area']] is not defined -%}
+{#{%- set _ = kso.update({i['ospf_area'] : {}}) -%} #}
+{%- set _ = kso.update({i['ospf_area'] : []}) -%} 
+{%- endif -%}
+
+{% if i['srlg'] is defined -%}
+{% set _ = ksrlg.update({ksi[i['port']]:i.srlg}) -%}
+{%- endif -%}
+{%- if i['port'] == 'system' -%}
+{%- set _ = kso[i['ospf_area']].append('system') -%} 
+{%- else -%}
+{%- set _ = kso[i['ospf_area']].append(ksi[i['port']]) -%} 
+{%- endif -%}
+{# {% set _ = kso[i['ospf_area']].update({ksi[i['port']]:i['ospf_area']}) -%} #}
+{%- endif %}
+            no shutdown
+        exit
+{% endfor %}
+#{ DEBUG:  RID: {{ rid }} }
+#{ DEBUG:  KSO: {{ kso }} }
+#{ DEBUG:  NODESID: {{ nodesid }} }
+{# {% block ospf scoped -%} #}
+{# {% endblock -%} #}
+        autonomous-system {{ global.bgp.asn }}
+{% include "men21-ospf.j2" %}
+{% include "men21-mpls.j2" %}
+{% include "men21-bgp.j2" %}
+    exit
+{% include "men21-services-global.j2" %}
+exit
+{#  {% endfor -%} #}
+{%- endfor -%}
+{# {% include "ks-foot.j2" -%} #}
+

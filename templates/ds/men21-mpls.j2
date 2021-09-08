@@ -1,0 +1,70 @@
+#--------------------------------------------------
+echo "MPLS Configuration"                          
+#--------------------------------------------------
+        mpls
+{% for i in value['interfaces'] %}
+{% if ksi[i['port']] is defined %}
+{# {% for mk, mv in ksi.items() %} #}
+{#            interface "{{ mv }}" #}
+            interface "{{ i.name }}"
+{#     TEST: {{ r[key]['interfaces'][mk] }} TEST2: {{ r[key]['interfaces'][mk]['srlg'] }} #}
+{# {% if ksrlg[mv] %} #}
+{% if i['srlg'] %}
+{#                srlg-group "{{ ksrlg[mv] }}" #}
+                srlg-group "{{ i.srlg }}"
+{% endif %}
+                no shutdown
+            exit
+{% endif %}
+{% endfor -%}
+
+{# TEST SRLG: {{ ksrlg }} #}
+#--------------------------------------------------
+echo "MPLS LSP Configuration"                      
+#--------------------------------------------------
+            sr-te-resignal
+                resignal-timer 3600
+                resignal-on-igp-event
+            exit
+            path "loose"
+                no shutdown
+            exit
+            path "secondary"
+                no shutdown
+            exit
+{# {% for a in routers.aggr -%} #}
+{% for ak, av in routers.aggr.items() %}
+            lsp "{{ key }}_{{ ak }}" sr-te
+{% for _i in av.interfaces -%}
+{%- if _i.name == 'system' %}
+                to {{ _i.ip | ipv4_addr }}
+{% endif -%}
+{%- endfor %}
+                path-computation-method local-cspf
+                label-stack-reduction
+                bfd
+                    failure-action failover-or-down
+                exit
+                primary "loose"
+                    bfd
+                        bfd-template "SBFD-KS-MEN"
+                        bfd-enable
+                    exit
+                exit
+                secondary "secondary"
+                    standby
+                    srlg
+                exit
+                no shutdown
+            exit
+{% endfor %}
+{# {% endfor %} #}
+            no shutdown
+        exit
+#--------------------------------------------------
+echo "LDP Configuration"
+#--------------------------------------------------
+        ldp
+            no shutdown
+        exit
+

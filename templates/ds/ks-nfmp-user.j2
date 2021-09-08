@@ -1,0 +1,13 @@
+# Add NFM-P user
+configure
+    system
+        security
+            user {{ user }}
+                snmp
+                    authentication sha {{ authKey }} privacy des-key {{ privKey }}
+                    group "nmsPriv"
+                exit
+            exit
+        exit
+    exit
+exit

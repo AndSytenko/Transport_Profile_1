@@ -1,0 +1,69 @@
+#--------------------------------------------------
+echo "MPLS Label Range Configuration"
+#--------------------------------------------------
+        mpls-labels
+            sr-labels start 20000 end 69999
+            reserved-label-block "LBLK-1"
+                start-label 19000 end-label 19255
+            exit
+        exit
+#--------------------------------------------------
+echo "OSPF Configuration"                          
+#--------------------------------------------------
+{# {% if r[key]['ospf'] is defined %} #}
+{% if value['ospf'] is defined %}
+        ospf 
+            reference-bandwidth 4000000000
+            traffic-engineering-options
+                sr-te application-specific-link-attributes
+            exit
+            traffic-engineering
+            timers
+                lsa-arrival 15
+                lsa-generate 5000 lsa-initial-wait 20 lsa-second-wait 20
+                spf-wait 5000 spf-initial-wait 50 spf-second-wait 50
+            exit
+            advertise-router-capability area
+            loopfree-alternates
+                ti-lfa max-sr-frr-labels 1
+                exit
+            exit
+            segment-routing
+                adj-sid-hold 10
+                prefix-sid-range start-label 20000 max-index 49999
+                no shutdown
+            exit
+{% for i in kso %}
+{# {% for ok in r[key]['ospf'] %} #}
+{% for ok in value['ospf'] %}
+{% if ok['area'] is defined %}
+{% if ok['area'] == i %}
+            area {{ i }}
+{% if ok['type'] is defined %}
+{% if ok['type'] == 'nssa' %}
+                nssa
+{% endif %}
+{% endif %}
+{% for ai in kso[i] %}
+                interface {{ ai }}
+{% if ai == 'system' %}
+{% if nodesid.sid is defined %}
+                    node-sid index {{ nodesid.sid }}
+{% endif %}
+{% else %}
+                    interface-type point-to-point
+{% endif %}
+                    no shutdown
+                exit
+{% endfor %}
+            exit
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+            no shutdown
+        exit  
+{% endif %}
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+

@@ -1,0 +1,21 @@
+#--------------------------------------------------
+echo "BGP Configuration"
+#--------------------------------------------------
+        bgp
+{% if bgp_area_tag is defined %}
+            group "RRC_MEN_{{ bgp_area_tag.btag }}"
+{% for p in rrc %}
+{# {%- if rrbgp[p.peer] is not defined -%} #}
+{# {%- set _ = rrbgp.update({p.peer : []}) -%} #}
+{# {% endif %} #}
+{# {%- set _ = rrbgp[p.peer].append({'peer': rid.rid, 'descr': key}) -%} #}
+                neighbor {{ p.peer | ipv4_addr }}
+{% if p.descr is defined %}
+                    description "{{ p.descr }}"
+{% endif %}
+                exit
+{% endfor %}
+            exit
+{% endif %}
+        exit
+

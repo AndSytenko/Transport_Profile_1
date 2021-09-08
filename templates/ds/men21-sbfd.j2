@@ -1,0 +1,58 @@
+#--------------------------------------------------
+echo "BFD Configuration"
+#--------------------------------------------------
+    bfd
+{% if value['bfd']['discriminator'] is defined %}
+        seamless-bfd
+            reflector "SBFD-REFLECTOR"
+                discriminator {{ value['bfd']['discriminator'] }}
+{% if value['model'] is defined %}
+{% if value['model'] == '7750' %}
+                type cmp-np
+{% endif %}
+{% endif %}
+                no shutdown
+            exit
+        exit
+{% endif %}
+    exit
+    router
+        bfd
+            begin
+            bfd-template "SBFD-KS-MEN"
+{% if value['model'] is defined %}
+{% if value['model'] == '7750' %}
+                type "cpm-np"
+{% endif %}
+{% endif %}
+            exit
+            commit
+            seamless-bfd
+#           Extract S-BFD peer info from IGP (dynamic) 
+#           if peer's SROS supports it
+{# {% for a in routers.aggr -%} #}
+{# {% for a in routers.aggr -%} #}
+{# Aggr: {{ a }} #}
+{# {% for ak,av in a.items() -%} #}
+{% for akb,avb in routers.aggr.items() -%} 
+{# AK: {{ akb }} AV: {{ avb }} #}
+{% if avb.timos.major is defined %}
+{% if avb.timos.major|int < 20 %}
+{% for ib in avb.interfaces %}
+{# Aggr interfaces: {{ ib }} #}
+{% if ib.name == 'system' %}
+                peer {{ ib.ip | ipv4_addr }}
+                    discriminator {{ avb.bfd.discriminator }}
+                exit
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# {% endfor %} #}
+            exit
+        exit
+    exit
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+

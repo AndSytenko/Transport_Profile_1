@@ -1,0 +1,37 @@
+#--------------------------------------------------
+echo "OSPF Configuration"                          
+#--------------------------------------------------
+{% if value['ospf'] is defined %}
+        ospf 
+{% for i in kso %}
+{% for ok in value['ospf'] %}
+{% if ok['area'] is defined %}
+{% if ok['area'] == i %}
+            area {{ i }}
+{% if ok['type'] is defined %}
+{% if ok['type'] == 'nssa' %}
+                nssa
+{% endif %}
+{% endif %}
+{% for ai in kso[i] %}
+                interface {{ ai }}
+{% if ai == 'system' %}
+{% if nodesid.sid is defined %}
+                    node-sid index {{ nodesid.sid }}
+{% endif %}
+{% else %}
+                    interface-type point-to-point
+{% endif %}
+                    no shutdown
+                exit
+{% endfor %}
+            exit
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{#            no shutdown #}
+        exit 
+{% endif %}
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=yaml

@@ -1,0 +1,219 @@
+{% set rrc = [] -%}
+{# {% for d in routers.ds -%} #}
+#{ DEBUG: DS: {{ d }} }
+{# {% for dk, dv in d.items() -%} #}
+{% for dk, dv in routers.ds.items() -%}
+{# {% for dk, dv in d.items() -%} #}
+{% for i in dv.interfaces %}
+#{ DEBUG: DS interface: {{ i }} }
+{% if i.name == "system" -%}
+{% set _= rrc.append({'peer': i.ip, 'descr': dk}) -%}
+{% endif %}
+{# {% endfor %} #}
+{% endfor %}
+{% endfor %}
+#{ DEBUG: RRC {{ rrc }} }
+{# {% for r in routers.aggr -%} #}
+{# {% for key,value in r.items() -%} #}
+  {% for key,value in routers.aggr.items() -%}
+#{ DEBUG: Aggr router value: {{ value }} }
+###################################################
+#--------------------------------------------------
+echo " -- Configuring aggregation router {{ key }} --"
+#--------------------------------------------------
+###################################################
+exit all
+configure
+{% include "men21-sbfd.j2" %}
+#--------------------------------------------------
+echo "Port Configuration"
+#--------------------------------------------------
+{% set ksi = {} -%}
+{# {% for p in r[key]['ports'] -%} #}
+{% for p in value.ports -%}
+{% if p['sfp'] is defined -%}
+{% if p.sfp == "QSFP28" %}
+    #--- create a 100G connector
+    port {{ p.port }}
+        description "{{ p.peer_name }}:{{ p.peer_port }}"
+        connector
+            breakout c1-100g
+        exit
+        no shutdown
+    exit
+{% else %}
+    port {{ p.port }}
+        description "{{ p.peer_name }}:{{ p.peer_port }}"
+        ethernet
+{% if p.peer_port | str_match_rgx('^esat\-\d+\/\d+\/\d+$') %}
+            mtu 9208
+{% endif %}
+            mode hybrid
+            encap-type dot1q
+{% if p.sfp == "QSFP28" %}
+            egress-scheduler-policy "PS-100G"
+{% else %}
+            egress-scheduler-policy "PS-10G"
+{% endif %}
+            network
+                queue-policy "KSTAR-NETWORK"
+            exit
+            lldp
+                dest-mac nearest-bridge
+                    admin-status tx-rx
+                    notification
+                    tx-tlvs port-desc sys-name sys-desc sys-cap
+                    tx-mgmt-address system
+                exit
+            exit
+            hold-time up 5
+        exit
+        no shutdown
+    exit
+{% endif %}
+{% endif -%}
+{% set _ = ksi.update({p.port:"{}_if1".format(p.peer_name)}) -%}
+{% endfor -%}
+#--------------------------------------------------
+echo "Router (Network Side) Configuration"         
+#--------------------------------------------------
+#{ DEBUG: interface KSI list: {{ ksi }} }
+    router
+#--------------------------------------------------
+echo "IP Configuration"
+#--------------------------------------------------
+{#        if-attribute #}
+{#          srlg-group "SRLG-ACW" value 8 #}
+{#          srlg-group "SRLG-CW" value 9  #}
+{#        exit #}
+{% set kso = {} -%}
+{% set bgp_area_tag = {} -%}
+{% set ksrlg = {} -%}
+{% set nodesid = {} -%}
+{% set rid = {} %}
+{# interfaces {{ r[key]['interfaces'] }} #}
+{# {% for i in r[key]['interfaces'] if not i['port'] == 'system' %} #}
+{% for i in value['interfaces'] if not i['port'] == 'system' %}
+{% if ksi[i['port']] is defined %}
+        interface {{ ksi[i['port']] }}
+{% if i['vlan'] is defined %}
+            port {{ i.port }}:{{ i.vlan }}
+{% else %}
+            port {{ i.port }}
+{%- endif %}
+            icmp
+                no mask-reply
+                no redirects
+                no unreachables
+            exit
+            qos 200
+{% else -%}
+{%- if i['port'] == 'system' %}
+        interface system
+{% if i['ospf_area'] is defined -%}
+{% if i['ip'] is defined -%}
+{%- set _ = rid.update({'rid': i.ip, 'area': i.ospf_area }) -%}
+{% endif -%}
+{% endif -%}
+{% if i['sid'] is defined -%}
+{%- set _ = nodesid.update({'sid': i['sid']}) -%}
+{% endif -%}
+{% endif -%}
+{%- endif %}
+            address {{ i.ip }}
+{% if i['ospf_area'] is defined -%}
+{%- if kso[i['ospf_area']] is not defined -%}
+{%- set _ = kso.update({i['ospf_area'] : []}) -%} 
+{%- endif -%}
+
+{% if i['srlg'] is defined -%}
+{% set _ = ksrlg.update({ksi[i['port']]:i.srlg}) -%}
+{%- endif -%}
+{%- if i['port'] == 'system' -%}
+{%- set _ = kso[i['ospf_area']].append('system') -%} 
+{%- else -%}
+{%- set _ = kso[i['ospf_area']].append(ksi[i['port']]) -%} 
+{%- set _ = bgp_area_tag.update({'btag': i['ospf_area']}) -%} 
+{%- endif -%}
+{%- endif %}
+            no shutdown
+        exit
+{% endfor %}
+#{ DEBUG:  Check RID: {{ rid }} }
+#{ DEBUG:  Check KSO: {{ kso }} }
+#{ DEBUG:  Check NODESID: {{ nodesid }} }
+#{ DEBUG:  BGP area TAG: {{ bgp_area_tag }} }
+{% include "men21-ospf.j2" %}
+#--------------------------------------------------
+echo "MPLS Configuration"                          
+#--------------------------------------------------
+        mpls
+{% for i in value['interfaces'] %}
+{% if ksi[i['port']] is defined %}
+{# {% for mk, mv in ksi.items() %} #}
+{#            interface "{{ mv }}" #}
+            interface "{{ i.name }}"
+{#     TEST: {{ r[key]['interfaces'][mk] }} TEST2: {{ r[key]['interfaces'][mk]['srlg'] }} #}
+{# {% if ksrlg[mv] %} #}
+{% if i['srlg'] %}
+{#                srlg-group "{{ ksrlg[mv] }}" #}
+                srlg-group "{{ i.srlg }}"
+{% endif %}
+                no shutdown
+            exit
+{% endif %}
+{% endfor %}
+{# TEST SRLG: {{ ksrlg }} #}
+#--------------------------------------------------
+echo "MPLS LSP Configuration"                      
+#--------------------------------------------------
+{# {% for d in routers.ds -%} #}
+{# {% for dk, dv in d.items() %} #}
+{% for dk, dv in routers.ds.items() %}
+            lsp "{{ key }}_{{ dk }}" sr-te
+{% for _i in dv.interfaces -%}
+{%- if _i.name == 'system' %}
+                to {{ _i.ip | ipv4_addr }}
+{% endif -%}
+{%- endfor %}
+                path-computation-method local-cspf
+                label-stack-reduction
+                bfd
+                    failure-action failover-or-down
+                exit
+                primary "loose"
+                    bfd
+                        bfd-template "SBFD-KS-MEN"
+                        bfd-enable
+                    exit
+                exit
+                secondary "secondary"
+                    standby
+                    srlg
+                exit
+                no shutdown
+            exit
+{% endfor -%}
+{# {% endfor %} #}
+{#            no shutdown #}
+        exit
+#--------------------------------------------------
+echo "RSVP Configuration"
+#--------------------------------------------------
+        rsvp
+{# {% for i in r[key]['interfaces'] if not i['port'] == 'system' %} #}
+{% for i in value['interfaces'] if not i['port'] == 'system' %}
+            interface {{ i.name }}
+                shutdown
+            exit
+{% endfor %}
+        exit
+{% include "men21-bgp.j2" -%}
+#--------------------------------------------------
+    exit
+{% endfor -%}
+{# {% include "ks-foot.j2" -%} #}
+exit
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4 syntax=jinja
+
